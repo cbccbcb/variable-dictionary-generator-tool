@@ -1,0 +1,4 @@
+interface:
+  display_name: "Variable Dictionary Generator Tool"
+  short_description: "Code-driven variable lineage dictionary generator"
+  default_prompt: "Use $variable-dictionary-generator-tool to generate a structured Chinese variable lineage dictionary from a code path."
