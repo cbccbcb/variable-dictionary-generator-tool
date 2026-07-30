@@ -1,152 +1,101 @@
 # -*- coding: utf-8 -*-
 """
-演示用简化版收入特征工程脚本。
-从交易明细中计算近7/30/90天的工资收入和政府福利收入的基础统计量。
+演示：产出一个银行流水-收入能力模块的完整特征结果
 
-这是 txn_income_v1_1.py 的极简版本，仅保留核心结构用于演示 skill 的变量发现和血缘追溯能力。
+直接调用 txn_income_v1_1.py 的 SingleApplicationIncomeFeatureEngineer，
+用模拟数据生成全部 2,484 个变量，输出到 variable_lineage_dictionary.csv
+供 Excel / Python 用户查看。
 """
 
+import os, sys
 import numpy as np
 import pandas as pd
 
+# == 演示目标模块（请确保 txn_tool 在 Python path 中） ============
+try:
+    from txn_tool.txn_income_v1_1 import (
+        SingleApplicationIncomeFeatureEngineer,
+        income_type_tp_pairs,
+        income_type_category_pairs,
+    )
+except ModuleNotFoundError:
+    print("请将 txn_tool 目录放到 PYTHONPATH 或本文件所在目录")
+    raise
 
-class SimpleIncomeFeatureEngineer:
-    def __init__(self, df: pd.DataFrame, time_windows=None):
-        self.time_windows = sorted(time_windows) if time_windows else [7, 30, 90]
-        self.features = {}
-        self.df = df.copy()
-        self._prepare_data()
+# == 模拟 182 天交易数据 ============================================
+np.random.seed(2024)
+SAMPLE_DT = "2025-01-01"
+dates = pd.date_range("2024-07-01", "2025-01-01", freq="D")
 
-    def _prepare_data(self):
-        df = self.df.copy()
-        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").abs()
-        df["transaction_date"] = pd.to_datetime(df["transaction_date"], errors="coerce")
-        df["sample_datetime"] = pd.to_datetime(df["sample_datetime"], errors="coerce")
-        df["trac_days"] = (df["sample_datetime"].dt.floor("D") - df["transaction_date"].dt.floor("D")).dt.days
-        df = df[df["trac_days"] >= 0].copy()
+records = []
+for d in dates:
+    # 工资 → 每月 15 号
+    if d.day == 15:
+        records.append({"transaction_date": d, "amount": 5500 + np.random.normal(0, 300),
+                        "dr_cr": "credit", "category": "Wages",
+                        "tag_level1": "INCOME", "tag_level2": "Wages",
+                        "third_party": "Employer Pty Ltd"})
+    # 政府福利 → 每两周一次
+    if d.day in [1, 15]:
+        records.append({"transaction_date": d, "amount": 900 + np.random.normal(0, 60),
+                        "dr_cr": "credit", "category": "Centrelink",
+                        "tag_level1": "INCOME", "tag_level2": "Centrelink",
+                        "third_party": "Centrelink Pension"})
+        records.append({"transaction_date": d, "amount": 400 + np.random.normal(0, 30),
+                        "dr_cr": "credit", "category": "Family Benefits",
+                        "tag_level1": "INCOME", "tag_level2": "Centrelink",
+                        "third_party": "Family Benefits"})
+        records.append({"transaction_date": d, "amount": 350 + np.random.normal(0, 40),
+                        "dr_cr": "credit", "category": "JobSeeker",
+                        "tag_level1": "INCOME", "tag_level2": "Centrelink",
+                        "third_party": "JobSeeker"})
+    # 其他收入 → 偶尔发生
+    if np.random.random() < 0.08:
+        cats = ["All Other Credits", "External Transfers", "Gambling", "Insurance", "Rent", "Travel"]
+        cat = np.random.choice(cats)
+        records.append({"transaction_date": d, "amount": np.random.uniform(50, 2000),
+                        "dr_cr": "credit", "category": cat,
+                        "tag_level1": "INCOME", "tag_level2": "Other Income",
+                        "third_party": f"Counterparty {cat}"})
+    # 支出（EXPENSE）→ 每天随机消费
+    if np.random.random() < 0.7:
+        ecat = np.random.choice(["Groceries", "Dining Out", "Utilities", "Transport", "Retail"])
+        records.append({"transaction_date": d, "amount": np.random.uniform(10, 300),
+                        "dr_cr": "debit", "category": ecat,
+                        "tag_level1": "EXPENSE", "tag_level2": ecat,
+                        "third_party": f"Shop {ecat}"})
 
-        # 按 tag_level2 标出不同收入类型
-        self.wages_df = df[df["tag_level2"] == "Wages"].copy()
-        self.centrelink_df = df[df["tag_level2"] == "Centrelink"].copy()
-        self.other_income_df = df[df["tag_level2"] == "Other Income"].copy()
-        self.df = df
+df = pd.DataFrame(records)
+df["sample_datetime"] = pd.to_datetime(SAMPLE_DT)
+df["transaction_date"] = pd.to_datetime(df["transaction_date"])
+df["amount"] = df["amount"].abs()
+df["user_id"] = "demo_user"
+df["account_type"] = "transaction"
+df["bank_account_id"] = "demo_account"
+df["text"] = np.nan
 
-    # ===== 1) 全局收入统计 =====
-    def amount_global(self):
-        features = {}
-        for window in self.time_windows:
-            wdf = self.df[self.df["trac_days"] <= window]
-            if len(wdf) > 0:
-                features[f"bank_txn_income_global_sum_{window}d"] = float(wdf["amount"].sum())
-                features[f"bank_txn_income_global_count_{window}d"] = float(wdf["amount"].count())
-                features[f"bank_txn_income_global_mean_{window}d"] = float(wdf["amount"].mean())
-                features[f"bank_txn_income_global_max_{window}d"] = float(wdf["amount"].max())
-                features[f"bank_txn_income_global_cv_{window}d"] = float(wdf["amount"].std() / wdf["amount"].mean()) if wdf["amount"].mean() > 0 else np.nan
-            else:
-                for stat in ["sum", "count"]:
-                    features[f"bank_txn_income_global_{stat}_{window}d"] = 0.0
-                for stat in ["mean", "max", "cv"]:
-                    features[f"bank_txn_income_global_{stat}_{window}d"] = np.nan
-        self.features.update(features)
-        return features
+print(f"模拟数据: {len(df)} 条交易")
 
-    # ===== 2) 按收入类型统计 =====
-    def amount_by_type(self):
-        features = {}
-        income_types = {"Wages": self.wages_df, "Centrelink": self.centrelink_df}
-        for window in self.time_windows:
-            for itype, idf in income_types.items():
-                wdf = idf[idf["trac_days"] <= window]
-                if len(wdf) > 0:
-                    features[f"bank_txn_income_{itype}_sum_{window}d"] = float(wdf["amount"].sum())
-                    features[f"bank_txn_income_{itype}_count_{window}d"] = float(wdf["amount"].count())
-                    features[f"bank_txn_income_{itype}_mean_{window}d"] = float(wdf["amount"].mean())
-                else:
-                    features[f"bank_txn_income_{itype}_sum_{window}d"] = 0.0
-                    features[f"bank_txn_income_{itype}_count_{window}d"] = 0.0
-                    features[f"bank_txn_income_{itype}_mean_{window}d"] = np.nan
-        self.features.update(features)
-        return features
+# == 调用实际的特征工程类 ==========================================
+engine = SingleApplicationIncomeFeatureEngineer(
+    df=df,
+    time_windows=[7, 14, 28, 56, 84, 168, 182],
+    income_type_tp_pairs=income_type_tp_pairs,
+    income_type_category_pairs=income_type_category_pairs,
+    already_mapped=True,  # 模拟数据已含 tag_level1/tag_level2
+)
 
-    # ===== 3) 工资收入趋势 =====
-    def trend_slope(self):
-        features = {}
-        for window in self.time_windows:
-            for itype, idf in [("Wages", self.wages_df)]:
-                wdf = idf[idf["trac_days"] <= window]
-                if len(wdf) >= 2:
-                    daily = wdf.groupby("transaction_date")["amount"].sum().sort_index().reset_index()
-                    x = (daily["transaction_date"] - daily["transaction_date"].min()).dt.days.values.astype(float)
-                    y = daily["amount"].values.astype(float)
-                    slope = np.polyfit(x, y, 1)[0]
-                    features[f"bank_txn_income_{itype}_trend_slope_{window}d"] = float(slope)
-                else:
-                    features[f"bank_txn_income_{itype}_trend_slope_{window}d"] = np.nan
-        self.features.update(features)
-        return features
+out = engine.generate_all_features()
+print(f"生成特征: {out.shape[1] - 2} 个变量")  # 减去 user_id/sample_datetime
 
-    # ===== 4) 收入占比 =====
-    def ratio(self):
-        features = {}
-        income_types = {"Wages": self.wages_df, "Centrelink": self.centrelink_df}
-        for window in self.time_windows:
-            wdf = self.df[self.df["trac_days"] <= window]
-            total = float(wdf["amount"].sum()) if len(wdf) > 0 else 0.0
-            for itype, idf in income_types.items():
-                wdf_type = idf[idf["trac_days"] <= window]
-                type_sum = float(wdf_type["amount"].sum()) if len(wdf_type) > 0 else 0.0
-                if total > 0 and type_sum > 0:
-                    features[f"bank_txn_income_{itype}_ratio_{window}d"] = type_sum / total
-                elif total > 0:
-                    features[f"bank_txn_income_{itype}_ratio_{window}d"] = 0.0
-                else:
-                    features[f"bank_txn_income_{itype}_ratio_{window}d"] = np.nan
-        self.features.update(features)
-        return features
+# == 转置输出，方便阅读 ============================================
+feature_cols = [c for c in out.columns if c not in ("user_id", "sample_datetime")]
+long = out[feature_cols].T.reset_index()
+long.columns = ["变量", "值"]
 
-    # ===== 5) 收入窗口对比（最新 vs 3个月均值） =====
-    def amount_comparison(self):
-        features = {}
-        for itype, idf in [("Wages", self.wages_df)]:
-            latest = idf["amount"].iloc[0] if len(idf) > 0 else 0.0
-            wdf_90 = idf[idf["trac_days"] <= 90]
-            avg_90 = float(wdf_90["amount"].mean()) if len(wdf_90) > 0 else 0.0
-            if avg_90 > 0:
-                features[f"bank_txn_income_{itype}_latest_vs_3m"] = latest / avg_90
-            else:
-                features[f"bank_txn_income_{itype}_latest_vs_3m"] = np.nan
-        self.features.update(features)
-        return features
-
-    # ===== 输出 =====
-    def generate_all_features(self):
-        self.amount_global()
-        self.amount_by_type()
-        self.trend_slope()
-        self.ratio()
-        self.amount_comparison()
-        return pd.DataFrame([self.features])
-
-
-if __name__ == "__main__":
-    # 模拟数据
-    np.random.seed(42)
-    dates = pd.date_range("2024-01-01", "2024-03-31", freq="D")
-    sample_dt = "2024-04-01"
-
-    rows = []
-    for d in dates:
-        # 工资：每月15号发 5000+噪声
-        if d.day == 15:
-            rows.append({"transaction_date": d, "amount": 5000 + np.random.normal(0, 200), "tag_level2": "Wages", "sample_datetime": sample_dt})
-        # 政府福利：每两周 800+噪声
-        if d.day in [5, 20]:
-            rows.append({"transaction_date": d, "amount": 800 + np.random.normal(0, 50), "tag_level2": "Centrelink", "sample_datetime": sample_dt})
-        # 日常消费：每天随机
-        rows.append({"transaction_date": d, "amount": np.random.uniform(20, 200), "tag_level2": "Other Income", "sample_datetime": sample_dt})
-
-    df = pd.DataFrame(rows)
-    engine = SimpleIncomeFeatureEngineer(df, time_windows=[7, 30, 90])
-    result = engine.generate_all_features()
-    print(f"生成 {result.shape[1]} 个变量")
-    print(result.T.head(10).to_string())
+OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "variable_lineage_dictionary.csv")
+long.to_csv(OUT_PATH, index=False, encoding="utf-8-sig")
+print(f"已保存到 {OUT_PATH}")
+print(f"\n前 10 个变量预览：")
+print(long.head(10).to_string(index=False))
