@@ -2,35 +2,70 @@
 
 Generate an 指标分类与血缘说明文档 as strict CSV.
 
-## Required Header
+## Output Format
 
-The first row must be exactly:
+Variables are output with different columns depending on their code language (`代码语言` field: `SQL` or `Python`).
 
-```csv
-feature,source_module,feature_name,time_window_cn,indicator_level1_category_cn,indicator_level2_category_cn,indicator_category_cn,source_function_cn,input_data_cn,processing_logic_cn,calculation_logic_cn,lineage_summary_cn
+### Common columns (all variables, 9 columns)
+
 ```
+变量, 变量名称, 一级类别, 二级类别, 三级类别, 来源模块, 代码语言, 时间窗口, 缺失值取值, 衍生过程
+```
+
+### SQL-specific columns (11 columns total)
+
+After `时间窗口`, insert: `筛选逻辑`, `聚合逻辑`
+
+```
+变量, 变量名称, 一级类别, 二级类别, 三级类别, 来源模块, 代码语言, 时间窗口, 筛选逻辑, 聚合逻辑, 缺失值取值, 衍生过程
+```
+
+### Python-specific columns (11 columns total)
+
+After `时间窗口`, insert: `来源函数`, `输入字段`
+
+```
+变量, 变量名称, 一级类别, 二级类别, 三级类别, 来源模块, 代码语言, 时间窗口, 来源函数, 输入字段, 缺失值取值, 衍生过程
+```
+
+### Code language determination
+
+- `.sql` files → `SQL`
+- `.py` files that construct SQL strings (contain `SELECT ... FROM ...`) → `SQL`
+- `.py` files with pure Python business logic (pandas, numpy, sklearn) → `Python`
+
+## Column Mapping
+
+| English | Chinese | Applicability |
+|---|---|---|
+| `feature` | `变量` | All |
+| `feature_name` | `变量名称` | All |
+| `indicator_level1_category_cn` | `一级类别` | All |
+| `indicator_level2_category_cn` | `二级类别` | All |
+| `indicator_category_cn` | `三级类别` | All |
+| `source_module` | `来源模块` | All |
+| `code_language` | `代码语言` | All |
+| `time_window_cn` | `时间窗口` | All |
+| `filter_logic` | `筛选逻辑` | SQL only |
+| `agg_logic` | `聚合逻辑` | SQL only |
+| `source_function_cn` | `来源函数` | Python only |
+| `input_data_cn` | `输入字段` | Python only |
+| `null_value` | `缺失值取值` | All |
+| `lineage_summary_cn` | `衍生过程` | All |
 
 ## Field Definitions
 
-### feature
+### 变量
 
-变量英文名。
+变量英文名。对应代码中最终输出的列名或变量名。
 
-### source_module
-
-变量来源模块，通常来自源代码文件名、模块名、SQL 脚本名或特征加工脚本名。
-
-### feature_name
+### 变量名称
 
 变量中文名。要求体现业务含义，不要只是机械翻译英文变量名。
 
-### time_window_cn
+### 一级类别
 
-时间窗口中文说明，例如 `近14天`、`近168天`。如果没有固定窗口，填写 `全历史/无固定窗口`。如果代码中无法确认，填写 `代码中未明确体现`。
-
-### indicator_level1_category_cn
-
-指标一级分类，即最高层业务主题分类，用来回答“这个变量属于哪类业务能力或风险视角”。分类必须业务化，例如：
+指标一级分类，即最高层业务主题分类，用来回答"这个变量属于哪类业务能力或风险视角"。分类必须业务化，例如：
 
 - 余额稳定性
 - 资金流入流出
@@ -42,9 +77,9 @@ feature,source_module,feature_name,time_window_cn,indicator_level1_category_cn,i
 - 支出行为
 - 贷款/还款行为
 
-### indicator_level2_category_cn
+### 二级类别
 
-指标二级分类，即一级分类下的细分分析方向，用来回答“这个变量具体衡量什么”。例如：
+指标二级分类，即一级分类下的细分分析方向，用来回答"这个变量具体衡量什么"。例如：
 
 - 余额波动
 - 余额趋势
@@ -55,7 +90,7 @@ feature,source_module,feature_name,time_window_cn,indicator_level1_category_cn,i
 - 贷方入账强度
 - 还款稳定性
 
-### indicator_category_cn
+### 三级类别
 
 指标所属中文细分类。建议采用 `一级业务主题-具体统计方向`，例如：
 
@@ -64,23 +99,46 @@ feature,source_module,feature_name,time_window_cn,indicator_level1_category_cn,i
 - 余额-趋势变化统计
 - 交易-借方支出统计
 
-### source_function_cn
+### 来源模块
 
-来源函数的中文说明，用于解释该变量由哪类特征加工逻辑生成。
+变量来源模块，通常来自源代码文件名、模块名、SQL 脚本名或特征加工脚本名。
 
-### input_data_cn
+### 代码语言
+
+变量来源代码的语言类型。取值为 `SQL` 或 `Python`。
+
+### 时间窗口
+
+时间窗口中文说明，例如 `近14天`、`近168天`。如果没有固定窗口，填写 `全历史/无固定窗口`。如果代码中无法确认，填写 `代码中未明确体现`。
+
+### 筛选逻辑 (SQL only)
+
+SQL 变量特有的筛选条件说明。描述 WHERE 子句中的数据过滤逻辑。
+
+### 聚合逻辑 (SQL only)
+
+SQL 变量特有的聚合方式说明。描述 GROUP BY 后的聚合函数、表达式等。
+
+### 来源函数 (Python only)
+
+Python 变量特有的来源函数中文说明，用于解释该变量由哪类特征加工函数生成。
+
+### 输入字段 (Python only)
 
 输入数据字段及含义说明。需要包括原始字段名、字段业务含义、字段参与计算的方式。
 
-### processing_logic_cn
+### 缺失值取值
 
-数据加工逻辑说明。需要包括能从代码确认的时间窗口截取、数据筛选、分组、中间字段生成、状态识别、去重、排序等。
+变量在数据缺失时的默认填充值。例如 `-1000000`、`-1`、`0`。
 
-### calculation_logic_cn
+**缺失值取值优先级**（最终输出值，不是中间聚合层的值）：
 
-计算逻辑说明。描述变量如何通过聚合、统计、排序、条件判断或表达式计算得到。
+1. **最高优先级**：检查最终合并表（不含 `_middle` 的表名）中是否有 `nvl(聚合变量, default_value) as xxx` 覆盖 → 以 `default_value` 为准（如 `-1`）
+2. 其次：检查聚合层表达式中显式的 `else` / `nvl` 默认值
+3. 最后：按聚合函数特征推断（`sum` → 空集返回0，`max/min/avg` → 空集返回null）
+- 常见陷阱：`-min(if(cond, val, 2))` 中内部填充值 `2`（取负后 `-2`）只是 CTAS 聚合层值，最终合并表 `nvl(..., -1)` 覆盖后 → **缺失值取值应为 `-1`**
 
-### lineage_summary_cn
+### 衍生过程
 
 一句话血缘摘要，使用：
 
@@ -88,23 +146,25 @@ feature,source_module,feature_name,time_window_cn,indicator_level1_category_cn,i
 原始数据 -> 加工处理 -> 计算 -> 输出变量
 ```
 
+需要尽量清楚描述原始输入字段、筛选逻辑、时间窗口、分组维度、聚合方式、计算公式、最终输出变量。
+
 ## Classification Rules
 
 1. 一级分类必须有明确业务含义，不要只按技术字段、函数名或代码结构分类。
 2. 二级分类必须比一级分类更具体，说明该指标实际衡量的业务行为、风险特征或统计方向。
 3. 相似指标应归入相同或相近的一级/二级分类，分类名称要稳定、可复用。
-4. `feature_name` 要业务化，能够让业务人员理解变量含义，不要只是直译英文变量名。
+4. `变量名称` 要业务化，能够让业务人员理解变量含义，不要只是直译英文变量名。
 5. 时间窗口需要优先从变量名、函数参数、代码逻辑或过滤条件中识别。
-6. 血缘说明必须尽量清楚描述原始输入字段、筛选逻辑、时间窗口、分组维度、聚合方式、计算公式、最终输出变量。
+6. 衍生过程必须尽量清楚描述原始输入字段、筛选逻辑、时间窗口、分组维度、聚合方式、计算公式、最终输出变量。
 7. 如果无法从代码或变量清单中确认具体逻辑，不要强行编造，填写 `根据变量名推测` 或 `代码中未明确体现`。
-8. 如果同一变量涉及多个来源字段或多个中间处理步骤，需要在 `processing_logic_cn` 和 `lineage_summary_cn` 中完整说明。
+8. 如果同一变量涉及多个来源字段或多个中间处理步骤，需要在 `衍生过程` 中完整说明。
 
 ## CSV Formatting Rules
 
 1. 只输出 CSV 内容，不要输出 Markdown 表格。
 2. 第一行必须是表头。
-3. 每个 `feature` 输出一行。
-4. 字段顺序必须严格保持 Required Header 的顺序。
+3. 每个 `变量` 输出一行。
+4. 字段顺序必须严格保持对应语言版本的 header 顺序。
 5. 所有字段都必须用英文逗号分隔。
 6. 如果字段内容中包含英文逗号、换行或双引号，必须用英文双引号包裹。
 7. 双引号内部如果再次出现双引号，需要转义为两个双引号。
