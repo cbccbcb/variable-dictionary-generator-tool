@@ -19,7 +19,7 @@ Choose the lightest mode that can produce reliable, evidence-backed lineage. If 
 |---|---|---|---|
 | `quick` | Single file, direct feature assignments, simple SQL, or quick exploratory output. | code path -> scan chunks -> LLM extracts lineage facts -> final CSV -> validation | `code_chunks.jsonl`, `lineage_facts.jsonl`, `variable_lineage_dictionary.csv`, `validation_report.json` |
 | `standard` | Default. Multi-file or moderately complex projects where variables can still be traced from feature-generation modules. | code path -> scan chunks -> lightweight project triage -> LLM extracts lineage facts -> final CSV -> validation | `code_chunks.jsonl`, `lineage_facts.jsonl`, `variable_lineage_dictionary.csv`, `validation_report.json` |
-| `deep` | Large projects, many nested modules, complex data preparation, >1000 variables, unclear entrypoints, or audit requirements. | code path -> scan chunks -> `code_map.json` -> `data_preparation_facts.jsonl` -> `feature_discovery.jsonl` -> `lineage_facts.jsonl` -> final CSV -> review/validation | all standard outputs plus `code_map.json`, `data_preparation_facts.jsonl`, `feature_discovery.jsonl`, optional `review_issues.jsonl` |
+| `deep` | Large projects, many nested modules, complex data preparation, >5000 variables, unclear entrypoints, or audit requirements. | code path -> scan chunks -> `code_map.json` -> `data_preparation_facts.jsonl` -> `feature_discovery.jsonl` -> `lineage_facts.jsonl` -> final CSV -> review/validation | all standard outputs plus `code_map.json`, `data_preparation_facts.jsonl`, `feature_discovery.jsonl`, optional `review_issues.jsonl` |
 
 ## Mode Selection Heuristics
 
