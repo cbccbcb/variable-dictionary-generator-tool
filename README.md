@@ -66,18 +66,34 @@ SQL 场景下工具会自动区分多阶段 CTAS：跳过中间表、只提取�
 
 | 文件 | 说明 |
 |---|---|
-| `demo_income.py` | 简化版收入特征工程脚本，35 个变量，**无需外部依赖即可运行** |
-| `variable_lineage_dictionary.csv` | **skill 对真实项目 `txn_income_v1_1.py` 生成的完整变量字典**，2,484 个变量，12 列 |
+| `demo_income.py` | 简化版收入特征工程脚本，35 个变量，无需外部依赖即可运行 |
+| `variable_lineage_dictionary.csv` | skill 对真实项目 `txn_income_v1_1.py` 生成的完整变量字典，2,484 个变量，12 列 |
 
-字典 CSV 效果如下（前 5 行）：
+字典 CSV 中每个变量包含 12 个字段，效果如下（以 `bank_txn_income_Wages_sum_7d` 为例）：
 
-| 变量 | 变量名称 | 一级类别 | 二级类别 | 来源函数 | 时间窗口 | 衍生过程 |
-|---|---|---|---|---|---|---|
-| bank_txn_income_global_sum_7d | 近7天总收入总额 | 收入能力 | 基础统计-求和 | amount_global | 近7天 | 流水原始数据 + finv映射 -> SingleApplicationIncomeFeatureEngineer -> amount_global(近7天) -> ... |
-| bank_txn_income_global_cv_7d | 近7天总收入变异系数 | 收入能力 | 基础统计-变异系数 | amount_global | 近7天 | ... |
-| bank_txn_income_Wages_sum_7d | 近7天工资收入总额 | 收入能力 | 基础统计-求和 | amount_by_type | 近7天 | ... |
-| bank_txn_income_Wages_trend_slope_30d | 近30天工资收入趋势斜率 | 收入能力 | 趋势分析 | trend_slope | 近30天 | ... |
-| bank_txn_income_Wages_latest_vs_3m | 工资收入最新值与近3月均值之比 | 收入能力 | 窗口对比分析 | amount_comparison | 近90天 | ... |
+- **变量**：`bank_txn_income_Wages_sum_7d`
+- **变量名称**：近 7 天工资收入总额
+- **一级类别**：收入能力
+- **二级类别**：基础统计-求和
+- **三级类别**：收入能力-基础统计-求和
+- **来源模块**：txn_income_v1_1
+- **代码语言**：Python
+- **时间窗口**：近 7 天
+- **来源函数**：amount_by_type
+- **输入字段**：amount, trac_days, tag_level2（从流水原始字段 + finv 映射表扩充）
+- **缺失值取值**：-1000000
+- **衍生过程**：流水原始数据 → finv 映射 → SingleApplicationIncomeFeatureEngineer → amount_by_type(近 7 天) → bank_txn_income_Wages_sum_7d
+
+再看一个不同类型的变量：
+
+- **变量**：`bank_txn_income_Wages_latest_vs_3m`
+- **变量名称**：工资收入最新值与近 3 月均值之比
+- **一级类别**：收入能力
+- **二级类别**：窗口对比分析
+- **来源函数**：amount_comparison
+- **衍生过程**：取最新一笔工资金额 / 近 90 天工资均值，衡量最近收入相对历史水平的变化
+
+完整 CSV 可下载 `examples/variable_lineage_dictionary.csv` 查看。
 
 ## 项目架构
 
