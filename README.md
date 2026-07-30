@@ -62,38 +62,14 @@ SQL 场景下工具会自动区分多阶段 CTAS：跳过中间表、只提取�
 
 ## 示例
 
-`examples/` 目录包含对真实项目运行 skill 后的产出：
+`examples/` 目录包含：
 
 | 文件 | 说明 |
 |---|---|
 | `demo_income.py` | 简化版收入特征工程脚本，35 个变量，无需外部依赖即可运行 |
-| `variable_lineage_dictionary.csv` | skill 对真实项目 `txn_income_v1_1.py` 生成的完整变量字典，2,484 个变量，12 列 |
+| `variable_lineage_dictionary.csv` | skill 对真实项目 `txn_income_v1_1.py` 生成的完整变量字典，2,484 个变量 |
 
-字典 CSV 中每个变量包含 12 个字段，效果如下（以 `bank_txn_income_Wages_sum_7d` 为例）：
-
-- **变量**：`bank_txn_income_Wages_sum_7d`
-- **变量名称**：近 7 天工资收入总额
-- **一级类别**：收入能力
-- **二级类别**：基础统计-求和
-- **三级类别**：收入能力-基础统计-求和
-- **来源模块**：txn_income_v1_1
-- **代码语言**：Python
-- **时间窗口**：近 7 天
-- **来源函数**：amount_by_type
-- **输入字段**：amount, trac_days, tag_level2（从流水原始字段 + finv 映射表扩充）
-- **缺失值取值**：-1000000
-- **衍生过程**：流水原始数据 → finv 映射 → SingleApplicationIncomeFeatureEngineer → amount_by_type(近 7 天) → bank_txn_income_Wages_sum_7d
-
-再看一个不同类型的变量：
-
-- **变量**：`bank_txn_income_Wages_latest_vs_3m`
-- **变量名称**：工资收入最新值与近 3 月均值之比
-- **一级类别**：收入能力
-- **二级类别**：窗口对比分析
-- **来源函数**：amount_comparison
-- **衍生过程**：取最新一笔工资金额 / 近 90 天工资均值，衡量最近收入相对历史水平的变化
-
-完整 CSV 可下载 `examples/variable_lineage_dictionary.csv` 查看。
+完整字典 CSV 可下载 `examples/variable_lineage_dictionary.csv` 查看，字段说明见上方"最终输出"。
 
 ## 项目架构
 
@@ -141,10 +117,61 @@ SQL 场景下工具会自动区分多阶段 CTAS：跳过中间表、只提取�
 
 ### 最终输出
 
-CSV 字典包含 12 列（Python 变量）或 11 列（SQL 变量）：
+CSV 字典共有 11 个字段，其中 9 个为两语言通用，2 个根据代码语言不同而不同。
 
-- Python 输出：`变量 | 变量名称 | 一级类别 | 二级类别 | 三级类别 | 来源模块 | 代码语言 | 时间窗口 | 来源函数 | 输入字段 | 缺失值取值 | 衍生过程`
-- SQL 输出：`变量 | 变量名称 | 一级类别 | 二级类别 | 三级类别 | 来源模块 | 代码语言 | 时间窗口 | 筛选逻辑 | 聚合逻辑 | 缺失值取值 | 衍生过程`
+**通用字段（Python 和 SQL 均包含）：**
+
+> 变量 | 变量名称 | 一级类别 | 二级类别 | 三级类别 | 来源模块 | 代码语言 | 时间窗口 | 缺失值取值 | 衍生过程
+
+**Python 特有字段：**
+
+> 来源函数 | 输入字段
+
+**SQL 特有字段：**
+
+> 筛选逻辑 | 聚合逻辑
+
+---
+
+#### Python 变量示例
+
+以 `bank_txn_income_Wages_sum_7d`（近 7 天工资收入总额）为例：
+
+| 字段 | 值 |
+|---|---|
+| 变量 | `bank_txn_income_Wages_sum_7d` |
+| 变量名称 | 近 7 天工资收入总额 |
+| 一级类别 | 收入能力 |
+| 二级类别 | 基础统计-求和 |
+| 三级类别 | 收入能力-基础统计-求和 |
+| 来源模块 | txn_income_v1_1 |
+| 代码语言 | Python |
+| 时间窗口 | 近 7 天 |
+| **来源函数** | `amount_by_type`（在 `wdf[tag_level2=='Wages']` 子集上调用 `.sum()`） |
+| **输入字段** | `amount`（交易金额）、`trac_days`（距今窗口天数）、`tag_level2`（收入类型标签） |
+| 缺失值取值 | `-1000000` |
+| 衍生过程 | 流水原始数据 → finv 映射表 → SingleApplicationIncomeFeatureEngineer → amount_by_type(近 7 天) → 变量 |
+
+#### SQL 变量示例
+
+以一个假设的信贷还款 SQL 变量 `paydebt_owing_principal_total_l30d`（近 30 天待还本金总额）为例：
+
+| 字段 | 值 |
+|---|---|
+| 变量 | `paydebt_owing_principal_total_l30d` |
+| 变量名称 | 近 30 天待还本金总额 |
+| 一级类别 | 待还状态 |
+| 二级类别 | 待还金额 |
+| 三级类别 | 待还状态-待还金额 |
+| 来源模块 | sql/paydebt_owing.sql |
+| 代码语言 | SQL |
+| 时间窗口 | 近 30 天 |
+| **筛选逻辑** | `loan_time >= sample_datetime - 30d AND owing_principal > 0` |
+| **聚合逻辑** | `nvl(sum(owing_principal), 0)` |
+| 缺失值取值 | `0` |
+| 衍生过程 | dwd_loan_owing 表 → WHERE 近30天 + 待还>0 → sum(本金) → 变量 |
+
+> **差异说明**：Python 变量通过 `来源函数` 和 `输入字段` 描述加工逻辑（代码调用链路）；SQL 变量通过 `筛选逻辑` 和 `聚合逻辑` 描述加工逻辑（WHERE + 聚合函数）。两种表示方式都是直接从代码中提取的原始表达式，不做翻译，保持可追溯性。
 
 ## 快速开始
 
